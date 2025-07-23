@@ -34,18 +34,18 @@ jobs:
     # Build the Docker Image
     - name: Build Docker Image
       run: |
-        docker build -t priyanshu777/devops-demo:${{ env.VERSION }} .
+        docker build -t priyanshu777/demo:${{ env.VERSION }} .
 
     # Push the Docker Image
     - name: Push Docker Image
       run: |
-        docker push priyanshu777/devops-demo:${{ env.VERSION }}
+        docker push priyanshu777/demo:${{ env.VERSION }}
 
     # UPdate the K8s Manifest Files
     - name: Update K8s Manifests
       run: |
         cat deploy/deployment.yaml
-        sed -i "s|image: priyanshu777/devops-demo:.*|image: priyanshu777/devops-demo:${{ env.VERSION }}|g" deploy/deployment.yaml
+        sed -i "s|image: priyanshu777/demo:.*|image: priyanshu777/demo:${{ env.VERSION }}|g" deploy/deployment.yaml
         cat deploy/deployment.yaml
 
     # Update Github
