@@ -1,59 +1,91 @@
-name: Test and Build
+name: Test, Build, Scan & Deploy
 
 on:
   push:
     branches:
-    - main
+      - main
     paths:
-    - '**/*'
+      - '**/*'
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
+    env:
+      IMAGE_REPO: priyanshu777/demo
+      AWS_REGION: us-east-1
+      CLUSTER_NAME: priyanshu-eks-cluster
+
     steps:
-    #Setting up environment
+    # Checkout source
     - name: Checkout code
       uses: actions/checkout@v2
 
+    # Setup Docker Buildx
     - name: Docker Setup
       uses: docker/setup-buildx-action@v2
 
+    # Docker Hub Login
     - name: Docker Credentials
       uses: docker/login-action@v2
       with:
         username: ${{ secrets.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_PASSWORD }}
 
+    # Generate unique image version tag
     - name: Docker tag
       id: version
       run: |
         VERSION=v$(date +"%Y%m%d%H%M%S")
         echo "VERSION=$VERSION" >> $GITHUB_ENV
 
-    # Build the Docker Image
+    # Build Docker image
     - name: Build Docker Image
       run: |
-        docker build -t priyanshu777/demo:${{ env.VERSION }} .
+        docker build -t $IMAGE_REPO:${{ env.VERSION }} .
 
-    # Push the Docker Image
+    # Install and Run Trivy Scan
+    - name: Install and Run Trivy Scan
+      run: |
+        echo "Installing Trivy..."
+        curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+        echo "Running Trivy Scan..."
+        trivy image --exit-code 1 --severity CRITICAL,HIGH $IMAGE_REPO:${{ env.VERSION }}
+
+    # Push Docker image
     - name: Push Docker Image
       run: |
-        docker push priyanshu777/demo:${{ env.VERSION }}
+        docker push $IMAGE_REPO:${{ env.VERSION }}
 
-    # UPdate the K8s Manifest Files
+    # Update Kubernetes manifest with new image version
     - name: Update K8s Manifests
       run: |
-        cat deploy/deployment.yaml
-        sed -i "s|image: priyanshu777/demo:.*|image: priyanshu777/demo:${{ env.VERSION }}|g" deploy/deployment.yaml
+        sed -i "s|image: $IMAGE_REPO:.*|image: $IMAGE_REPO:${{ env.VERSION }}|g" deploy/deployment.yaml
         cat deploy/deployment.yaml
 
-    # Update Github
+    # Commit updated manifest
     - name: Commit the changes
       run: |
-        git config --global user.email "<>"
+        git config --global user.email "bot@github.com"
         git config --global user.name "GitHub Actions Bot"
         git checkout main
         git add deploy/deployment.yaml
         git commit -m "Update deploy.yaml with new image version - ${{ env.VERSION }}"
         git push origin main
+
+    # Setup kubeconfig manually via bash
+    - name: Setup kubeconfig
+      run: |
+        mkdir -p ~/.kube
+        aws eks update-kubeconfig --region $AWS_REGION --name $CLUSTER_NAME
+        kubectl get nodes
+
+    # Apply Sealed Secrets
+    - name: Apply Sealed Secrets
+      run: |
+        kubectl apply -f deploy/sealedsecret.yaml
+
+    # Deploy to Kubernetes
+    - name: Deploy to Kubernetes
+      run: |
+        kubectl apply -f deploy/deployment.yaml
