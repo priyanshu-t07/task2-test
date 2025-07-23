@@ -66,8 +66,8 @@ jobs:
     # Update Kubernetes manifest with new image version
     - name: Update K8s Manifests
       run: |
-        sed -i "s|image: $IMAGE_REPO:.*|image: $IMAGE_REPO:${{ env.VERSION }}|g" deploy/deployment.yaml
-        cat deploy/deployment.yaml
+        sed -i "s|image: $IMAGE_REPO:.*|image: $IMAGE_REPO:${{ env.VERSION }}|g" k8s/deploy/deployment.yaml
+        cat k8s/deploy/deployment.yaml
 
     # Commit updated manifest
     - name: Commit the changes
@@ -75,7 +75,7 @@ jobs:
         git config --global user.email "bot@github.com"
         git config --global user.name "GitHub Actions Bot"
         git checkout main
-        git add deploy/deployment.yaml
+        git add k8s/deploy/deployment.yaml
         git commit -m "Update deploy.yaml with new image version - ${{ env.VERSION }}"
         git push origin main
 
@@ -89,9 +89,9 @@ jobs:
     # Apply Sealed Secrets
     - name: Apply Sealed Secrets
       run: |
-        kubectl apply -f deploy/sealedsecret.yaml
+        kubectl apply -f k8s/secrets/sealedsecret.yaml
 
     # Deploy to Kubernetes
     - name: Deploy to Kubernetes
       run: |
-        kubectl apply -f deploy/deployment.yaml
+        kubectl apply -f k8s/deploy/deployment.yaml
