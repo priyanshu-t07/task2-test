@@ -1,3 +1,4 @@
+
 name: Test, Build, Scan & Deploy
 
 on:
@@ -44,11 +45,16 @@ jobs:
       run: |
         docker build -t $IMAGE_REPO:${{ env.VERSION }} .
 
-    # Install and Run Trivy Scan
+    # Install and Run Trivy Scan (APT method)
     - name: Install and Run Trivy Scan
       run: |
-        echo "Installing Trivy..."
-        curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+        echo "Installing Trivy via APT..."
+        sudo apt-get update
+        sudo apt-get install wget apt-transport-https gnupg lsb-release -y
+        wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
+        echo "deb https://aquasecurity.github.io/trivy-repo/deb stable main" | sudo tee /etc/apt/sources.list.d/trivy.list
+        sudo apt-get update
+        sudo apt-get install trivy -y
         echo "Running Trivy Scan..."
         trivy image --exit-code 1 --severity CRITICAL,HIGH $IMAGE_REPO:${{ env.VERSION }}
 
@@ -73,7 +79,7 @@ jobs:
         git commit -m "Update deploy.yaml with new image version - ${{ env.VERSION }}"
         git push origin main
 
-    # Setup kubeconfig manually via bash
+    # Setup kubeconfig manually
     - name: Setup kubeconfig
       run: |
         mkdir -p ~/.kube
